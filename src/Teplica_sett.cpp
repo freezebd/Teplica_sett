@@ -1,5 +1,5 @@
 
-/*  /////////////// пояснения по прошивке ////////////////////
+/*  /////////////// пояснения по прошивке 1.10////////////////////
   // использование встроенного OTA update
   // зайди на адрес x.x.x.x/ota_update для открытия страницы обновления
   // Скетч/Экспорт бинарного файла (для получения файла прошивки)
@@ -22,8 +22,8 @@
 
 //#define STATIC_IP // закомментировать если подключаетесь к мобильной точке доступа на телефоне
 
-const char* ssid = "Freezebd";
-const char* password = "Vladilen0108";
+const char* ssid = "VideoWiFi";
+const char* password = "01082011";
 
 #ifdef STATIC_IP
 //со статическим айпишничком
@@ -55,13 +55,16 @@ GyverPortal ui(&LittleFS);     // для проверки файлов
 
 #include <RTClib.h>      // Часы реального времени
 RTC_DS3231 rtc;
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-#include <SPI.h>
+char daysOfTheWeek[7][23] = {"Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"};
+
+
+#include <SPI.h> // для I2C
 
 
 //Для датчика HTU21
 #include <GyverHTU21D.h>
 GyverHTU21D htu;
+
 //============Переменные для графика Ajax===========
 const char *plot_1[] = {
   "temp", "humidity", "humiditySoil"
@@ -74,7 +77,6 @@ struct Settings {
   GPtime stopTime;              // таймер света
   GPtime startTime2;            // таймер полива
   GPtime stopTime2;             // таймер полива
-
   int16_t minTempr = 0;
   int16_t maxTempr = 0;
   int16_t minHumi = 0;
@@ -90,7 +92,9 @@ struct Settings {
   bool rele_2_isOn = 0;
   bool rele_3_isOn = 0;
   bool rele_4_isOn = 0;
+  String dayWeek = "";
   };
+
 Settings setting;
 
 #include <EEPROM.h>
@@ -108,8 +112,6 @@ bool dependByHeating = 1;
 bool dependByHumidity = 1;
 bool dependByWatering = 1;
 bool dependByOnOff = 1;
-//GPdate nowDate1;
-//GPtime nowTime1;
 uint32_t startSeconds1 = 0;
 uint32_t stopSeconds1 = 0;
 float temperature = 0.0;
@@ -130,6 +132,7 @@ void htuRead() {
  // Serial.print(humidity);
  // Serial.println(" %"); 
 }
+
 // функця для датчика влажности почвы
 void sensRead() {
   humiditySoil = analogRead(SENS1);
@@ -137,6 +140,8 @@ void sensRead() {
  // Serial.print(humiditySoil);
  // Serial.println(" %");
 }
+
+// функция дня недели
 
 
 // поддержка wifi связи
@@ -153,7 +158,6 @@ void wifiSupport() {
       return;
     }
 #endif
-
     WiFi.begin(ssid, password);
     uint8_t trycon = 0;
     while (WiFi.status() != WL_CONNECTED) {
@@ -203,14 +207,15 @@ void build() {
   GP.ONLINE_CHECK();                   // Проверка системы на On-Line
 
   //все обновляющиеся параметры на WEB странице надо указать тут
-  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw");
+  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw,daysOfTheWeek");
   
   GP_MAKE_BLOCK_TAB(
     "Рости-Шишка",
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
     GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив"); ); // Верхнее меню блоков навигации
-  );
-    
+  );  
+ // GP.TEXT(daysOfTheWeek,"",""); // пока думаю как !!!!!
+
   GP.NAV_BLOCK_BEGIN();                 // начало блока
   //                    ===========Блок индикации реле============
   
@@ -476,6 +481,13 @@ void loop() {
 
   nowTime.set(now.hour(), now.minute(), now.second());    
   nowDate.set(now.year(), now.month(), now.day());
+
+ now.dayOfTheWeek();
+  Serial.print("День недели: ");
+  Serial.println(daysOfTheWeek[now.dayOfTheWeek() - 1 ] );
+  String dayWeek = (daysOfTheWeek[now.dayOfTheWeek() - 1 ] );
+
+  
 
   //================================логика==============================
  
