@@ -22,8 +22,8 @@
 
 //#define STATIC_IP // закомментировать если подключаетесь к мобильной точке доступа на телефоне
 
-const char* ssid = "Freezebd";
-const char* password = "Vladilen0108";
+const char* ssid = "VideoWiFi";
+const char* password = "01082011";
 
 #ifdef STATIC_IP
 //со статическим айпишничком
@@ -57,10 +57,13 @@ GyverPortal ui(&LittleFS);     // для проверки файлов
 RTC_DS3231 rtc;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
+#include <SPI.h> // для I2C
+
 
 //Для датчика HTU21
 #include <GyverHTU21D.h>
 GyverHTU21D htu;
+
 //============Переменные для графика Ajax===========
 const char *plot_1[] = {
   "temp", "humidity", "humiditySoil"
@@ -73,7 +76,6 @@ struct Settings {
   GPtime stopTime;              // таймер света
   GPtime startTime2;            // таймер полива
   GPtime stopTime2;             // таймер полива
-
   int16_t minTempr = 0;
   int16_t maxTempr = 0;
   int16_t minHumi = 0;
@@ -107,8 +109,6 @@ bool dependByHeating = 1;
 bool dependByHumidity = 1;
 bool dependByWatering = 1;
 bool dependByOnOff = 1;
-//GPdate nowDate1;
-//GPtime nowTime1;
 uint32_t startSeconds1 = 0;
 uint32_t stopSeconds1 = 0;
 float temperature = 0.0;
@@ -129,6 +129,7 @@ void htuRead() {
  // Serial.print(humidity);
  // Serial.println(" %"); 
 }
+
 // функця для датчика влажности почвы
 void sensRead() {
   humiditySoil = analogRead(SENS1);
@@ -136,7 +137,6 @@ void sensRead() {
  // Serial.print(humiditySoil);
  // Serial.println(" %");
 }
-
 
 // поддержка wifi связи
 void wifiSupport() {
@@ -152,7 +152,6 @@ void wifiSupport() {
       return;
     }
 #endif
-
     WiFi.begin(ssid, password);
     uint8_t trycon = 0;
     while (WiFi.status() != WL_CONNECTED) {
