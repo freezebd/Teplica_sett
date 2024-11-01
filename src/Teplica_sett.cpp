@@ -92,8 +92,9 @@ struct Settings {
   bool rele_2_isOn = 0;
   bool rele_3_isOn = 0;
   bool rele_4_isOn = 0;
-  
+  String dayWeek = "";
   };
+
 Settings setting;
 
 #include <EEPROM.h>
@@ -139,6 +140,9 @@ void sensRead() {
  // Serial.print(humiditySoil);
  // Serial.println(" %");
 }
+
+// функция дня недели
+
 
 // поддержка wifi связи
 void wifiSupport() {
@@ -210,7 +214,7 @@ void build() {
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
     GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив"); ); // Верхнее меню блоков навигации
   );  
-  GP.TEXT("dayOfTheWeek");
+ // GP.TEXT(daysOfTheWeek,"",""); // пока думаю как !!!!!
 
   GP.NAV_BLOCK_BEGIN();                 // начало блока
   //                    ===========Блок индикации реле============
@@ -478,9 +482,10 @@ void loop() {
   nowTime.set(now.hour(), now.minute(), now.second());    
   nowDate.set(now.year(), now.month(), now.day());
 
-  now.dayOfTheWeek();
+ now.dayOfTheWeek();
   Serial.print("День недели: ");
   Serial.println(daysOfTheWeek[now.dayOfTheWeek() - 1 ] );
+  String dayWeek = (daysOfTheWeek[now.dayOfTheWeek() - 1 ] );
 
   
 
