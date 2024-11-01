@@ -1,5 +1,5 @@
 
-/*  /////////////// пояснения по прошивке ////////////////////
+/*  /////////////// пояснения по прошивке 1.10////////////////////
   // использование встроенного OTA update
   // зайди на адрес x.x.x.x/ota_update для открытия страницы обновления
   // Скетч/Экспорт бинарного файла (для получения файла прошивки)
@@ -55,7 +55,8 @@ GyverPortal ui(&LittleFS);     // для проверки файлов
 
 #include <RTClib.h>      // Часы реального времени
 RTC_DS3231 rtc;
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+char daysOfTheWeek[7][23] = {"Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"};
+
 
 #include <SPI.h> // для I2C
 
@@ -91,6 +92,7 @@ struct Settings {
   bool rele_2_isOn = 0;
   bool rele_3_isOn = 0;
   bool rele_4_isOn = 0;
+  
   };
 Settings setting;
 
@@ -201,14 +203,15 @@ void build() {
   GP.ONLINE_CHECK();                   // Проверка системы на On-Line
 
   //все обновляющиеся параметры на WEB странице надо указать тут
-  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw");
+  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw,daysOfTheWeek");
   
   GP_MAKE_BLOCK_TAB(
     "Рости-Шишка",
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
     GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив"); ); // Верхнее меню блоков навигации
-  );
-    
+  );  
+  GP.TEXT("dayOfTheWeek");
+
   GP.NAV_BLOCK_BEGIN();                 // начало блока
   //                    ===========Блок индикации реле============
   
@@ -474,6 +477,12 @@ void loop() {
 
   nowTime.set(now.hour(), now.minute(), now.second());    
   nowDate.set(now.year(), now.month(), now.day());
+
+  now.dayOfTheWeek();
+  Serial.print("День недели: ");
+  Serial.println(daysOfTheWeek[now.dayOfTheWeek() - 1 ] );
+
+  
 
   //================================логика==============================
  
