@@ -57,6 +57,8 @@ GyverPortal ui(&LittleFS);     // для проверки файлов
 RTC_DS3231 rtc;
 char daysOfTheWeek[7][23] = {"Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"};
 
+  
+
 
 #include <SPI.h> // для I2C
 
@@ -92,7 +94,7 @@ struct Settings {
   bool rele_2_isOn = 0;
   bool rele_3_isOn = 0;
   bool rele_4_isOn = 0;
-  String dayWeek = "";
+  
   };
 
 Settings setting;
@@ -116,7 +118,7 @@ uint32_t startSeconds1 = 0;
 uint32_t stopSeconds1 = 0;
 float temperature = 0.0;
 float humidity = 0.0;
-int humiditySoil = 0;
+float humiditySoil = 0.0;
 
 
 
@@ -142,6 +144,7 @@ void sensRead() {
 }
 
 // функция дня недели
+
 
 
 // поддержка wifi связи
@@ -207,14 +210,16 @@ void build() {
   GP.ONLINE_CHECK();                   // Проверка системы на On-Line
 
   //все обновляющиеся параметры на WEB странице надо указать тут
-  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw,daysOfTheWeek");
+  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw,dayWeek,daysWeek");
   
   GP_MAKE_BLOCK_TAB(
     "Рости-Шишка",
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
     GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив"); ); // Верхнее меню блоков навигации
   );  
- // GP.TEXT(daysOfTheWeek,"",""); // пока думаю как !!!!!
+  GP.LABEL("daysWeek" , "dayWeek") ;
+
+
 
   GP.NAV_BLOCK_BEGIN();                 // начало блока
   //                    ===========Блок индикации реле============
@@ -299,7 +304,7 @@ void action() {
     ui.updateTime("stopTime2", setting.stopTime2);   // сьлп полив
     ui.updateFloat("tempr", temperature, 1);
     ui.updateFloat("humid", humidity, 1);
-    ui.updateInt("humidsoil", humiditySoil);
+    ui.updateFloat("humidsoil", humiditySoil);
     ui.updateBool("releIndikator1", setting.rele_1_isOn);
     ui.updateBool("releIndikator_1_1", setting.rele_1_isOn);
     ui.updateBool("releIndikator2", setting.rele_2_isOn);
@@ -313,6 +318,7 @@ void action() {
     ui.updateBool("sw_2", setting.dependByHumidity);  // Свич влажности
     ui.updateBool("sw_3", setting.dependByWatering);  // Свич полива
     ui.updateBool("sw", setting.dependByOnOff);       // Свитч 
+  
   if (ui.update("plot")) {                                 // Обновление данных для графика
     int answ[] = {temperature, humidity, humiditySoil};    // Обновление данных для графика было int
     ui.answer(answ, 3);                                    // Обновление данных для графика
@@ -401,13 +407,11 @@ void setup() {
   Serial.begin(115200);
   wifiSupport();
   htu.begin();
+  rtc.begin();
    if (!htu.begin()) Serial.println(F("HTU21D error"));
    
    if (! rtc.begin()) Serial.println(F("Couldn't find RTC"));  // Проверка модуля реального времени
   
-
-  
-
   // подключаем конструктор и запускаем
   ui.attachBuild(build);
   ui.attach(action);
@@ -415,7 +419,6 @@ void setup() {
   ui.enableOTA();  // без пароля
   //ui.enableOTA("admin", "pass");  // с паролем
 
-  
   if (!LittleFS.begin()) Serial.println("FS Error");
   ui.downloadAuto(true);
 
@@ -443,13 +446,14 @@ void setup() {
   else digitalWrite(RELE3, OFF);
   if (setting.rele_4_isOn) digitalWrite(RELE4, ON);
   else digitalWrite(RELE4, OFF);
+
+
 }  //setup()
 
 void loop() { 
   ui.tick();
- // ntp.tick();
   memory.tick();
- DateTime now = rtc.now();
+  DateTime now = rtc.now();
 
   // раз в 10 сек проверим стабильность сети
   static uint32_t ms1 = 0;
@@ -472,8 +476,16 @@ void loop() {
     ms3 = millis();
     sensRead();
   }
+   // раз в 5 сек проверяем показание с датчика sens1
+  static uint32_t ms4 = 0;
+  if (millis() - ms4 >= 5000) {
+   ms4 = millis();
+    now.dayOfTheWeek();
+    String dayWeek = (daysOfTheWeek[now.dayOfTheWeek() - 1 ]);
+    Serial.print("День недели: ");
+    Serial.println (dayWeek);
+  }
   
- 
   
   // отдаем текущую дату и время переменным в веб интерфейс
   //nowTime.set(ntp.hour(), ntp.minute(), ntp.second());
@@ -482,10 +494,6 @@ void loop() {
   nowTime.set(now.hour(), now.minute(), now.second());    
   nowDate.set(now.year(), now.month(), now.day());
 
- now.dayOfTheWeek();
-  Serial.print("День недели: ");
-  Serial.println(daysOfTheWeek[now.dayOfTheWeek() - 1 ] );
-  String dayWeek = (daysOfTheWeek[now.dayOfTheWeek() - 1 ] );
 
   
 
@@ -563,14 +571,14 @@ void loop() {
     setting.rele_3_isOn = 0;
     digitalWrite(RELE3, OFF);
   }
-  //==============================Логика полива по датчику влажности почвы===========
+  //==============================Логика полива по датчику влажности почвы и по времени===========
   // =============================включаем Полив по датчику влажност почвы===========
-  if (!setting.dependByWatering)
-  { // Если свитч отключен, то реле выключить
-    setting.rele_4_isOn = 0;
+  if (!setting.dependByWatering) // Если свитч отключен, то реле выключить
+  { 
     digitalWrite(RELE4, OFF);
+    setting.rele_4_isOn = 0;
   }
-  else
+  else if ((setting.dependByOnOff) && (setting.dependByWatering))
   {
     uint32_t nowSeconds1 = nowTime.hour * 3600 + nowTime.minute * 60 + nowTime.second;
     // если нет перехода через полночь
@@ -602,7 +610,7 @@ void loop() {
       }
     }
 
-    if (setting.dependByOnOff)
+     if (setting.dependByOnOff) // Проверка 
     {
       if ((humiditySoil <= setting.minHumiSoil) || (humiditySoil <= setting.maxHumiSoil))
       {
