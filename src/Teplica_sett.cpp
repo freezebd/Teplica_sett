@@ -119,6 +119,11 @@ uint32_t stopSeconds1 = 0;
 float temperature = 0.0;
 float humidity = 0.0;
 float humiditySoil = 0.0;
+int summTemp;
+int summHum; 
+int summHumSoil;
+String dayWeek;
+
 
 
 
@@ -127,23 +132,39 @@ void htuRead() {
   htu.readTick();                      //Запускаем датчик
   temperature = htu.getTemperature();  //переменная для температуры
   humidity = htu.getHumidity();        // переменная для влажности
- //Serial.print("Температура = ");
+  summTemp = temperature * 100 / 100 ; //переменная для графика int
+  summHum = humidity * 100 / 100 ;     //переменная для графика int
+ // Serial.print("Температура = ");
  // Serial.print(temperature);
  // Serial.println(" °C");
  // Serial.print("Влажность = ");
  // Serial.print(humidity);
+ // Serial.println(" %"); 
+ // Serial.print("Температура = ");
+ // Serial.print(summTemp);
+ // Serial.println(" °C");
+ // Serial.print("Влажность = ");
+ // Serial.print(summHum);
  // Serial.println(" %"); 
 }
 
 // функця для датчика влажности почвы
 void sensRead() {
   humiditySoil = analogRead(SENS1);
- // Serial.print("Влажность почвы = ");
- // Serial.print(humiditySoil);
- // Serial.println(" %");
+  summHumSoil = humiditySoil / 100 ;
+  Serial.print("Влажность почвы = ");
+  Serial.print(humiditySoil);
+  Serial.println(" %");
 }
 
 // функция дня недели
+void dayWeekRead() {
+  String daysOfTheWeek[] = {"Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"};
+  DateTime now = rtc.now();
+  String dayWeek = daysOfTheWeek[now.dayOfTheWeek()];
+  Serial.print("День недели : ");
+  Serial.println(dayWeek);
+}
 
 
 
@@ -176,32 +197,6 @@ void wifiSupport() {
   }
 }  //wifiSupport()
 
-
-/*
-//проверка NTP связи
-void checkNTPstauts() {
-  //проверим статус обновления ntp
-  byte ntpErr = ntp.status();
-  if (ntpErr) {
-    Serial.print("ntp err ");
-  }
-  */
-  /* Код ошибок NTP
-    // 0 - всё ок
-    // 1 - не запущен UDP
-    // 2 - не подключен WiFi
-    // 3 - ошибка подключения к серверу
-    // 4 - ошибка отправки пакета
-    // 5 - таймаут ответа сервера
-    // 6 - получен некорректный ответ сервера
-  */
- /*
-  if (!ntp.synced()) Serial.println("NTP not sync");
-  Serial.println(ntpErr);
-
-}  //checkNTPstauts()
-*/
-
 // конструктор WEB страницы
 void build() {
   GP.BUILD_BEGIN(400);
@@ -210,14 +205,15 @@ void build() {
   GP.ONLINE_CHECK();                   // Проверка системы на On-Line
 
   //все обновляющиеся параметры на WEB странице надо указать тут
-  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw,dayWeek,daysWeek");
+  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw,dayWeek");
   
   GP_MAKE_BLOCK_TAB(
     "Рости-Шишка",
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
+    GP_MAKE_BOX(GP.LABEL("dayWeek" , dayWeek););
     GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив"); ); // Верхнее меню блоков навигации
   );  
-  GP.LABEL("daysWeek" , "dayWeek") ;
+  
 
 
 
@@ -294,7 +290,7 @@ void build() {
 
 
 void action() {
-  // было обновление
+  // если было обновление 
   if (ui.update()) {
     ui.updateDate("nowDate", nowDate);
     ui.updateTime("nowTime", nowTime);
@@ -302,9 +298,9 @@ void action() {
     ui.updateTime("stopTime", setting.stopTime);     // стоп свет
     ui.updateTime("startTime2", setting.startTime2); // старт полив
     ui.updateTime("stopTime2", setting.stopTime2);   // сьлп полив
-    ui.updateFloat("tempr", temperature, 1);
+    ui.updateFloat("tempr", temperature, 1 );
     ui.updateFloat("humid", humidity, 1);
-    ui.updateFloat("humidsoil", humiditySoil);
+    ui.updateInt("humidsoil", humiditySoil);
     ui.updateBool("releIndikator1", setting.rele_1_isOn);
     ui.updateBool("releIndikator_1_1", setting.rele_1_isOn);
     ui.updateBool("releIndikator2", setting.rele_2_isOn);
@@ -318,13 +314,16 @@ void action() {
     ui.updateBool("sw_2", setting.dependByHumidity);  // Свич влажности
     ui.updateBool("sw_3", setting.dependByWatering);  // Свич полива
     ui.updateBool("sw", setting.dependByOnOff);       // Свитч 
+    ui.updateString("", dayWeek);              // день недели
   
   if (ui.update("plot")) {                                 // Обновление данных для графика
-    int answ[] = {temperature, humidity, humiditySoil};    // Обновление данных для графика было int
+    int answ[] = {summTemp, summHum, summHumSoil};    // Обновление данных для графика было int
     ui.answer(answ, 3);                                    // Обновление данных для графика
     }
   } //ui.update()
-  // =====================был клик по компоненту внутри веб странички
+
+  // =====================был клик по компоненту внутри веб странички===================================
+  //=====Меняем дату и время=
   if (ui.click()) {
     if (ui.clickDate("nowDate", nowDate)) {
         rtc.adjust (DateTime(nowDate.year, nowDate.month, nowDate.day, nowTime.hour, nowTime.minute, nowTime.second)); // записываем Время (и Дату! отдельно нельзя!) в RTC
@@ -337,8 +336,8 @@ void action() {
       //      Serial.print("Time: ");
       //      Serial.println(valTime.encode());
     }
-    //===============================================Меняем дату и время==================================
-    // ======================обновление времени запуска и отключения света
+    
+    // ====обновление времени запуска и отключения света
     if (ui.clickTime("startTime", setting.startTime)) {
       startSeconds = setting.startTime.hour * 60 * 60 + setting.startTime.minute * 60 + setting.startTime.second;
       memory.updateNow();
@@ -351,7 +350,7 @@ void action() {
       memory.updateNow();
     }
 
-    // =====================================Обновление нагрева switch/min/max =========================
+    // ====Обновление нагрева switch/min/max 
     if (ui.clickBool("sw_1", setting.dependByHeating)) {
       memory.updateNow();
     }
@@ -361,7 +360,7 @@ void action() {
     if (ui.clickInt("minTempr", setting.minTempr)) {
       memory.updateNow();
     }
-       //=================================Обновление влажности switch/min/max ==========================
+       //====Обновление влажности switch/min/max 
     if (ui.clickBool("sw_2", setting.dependByHumidity)) {
       memory.updateNow();
     }
@@ -371,7 +370,7 @@ void action() {
     if (ui.clickInt("maxHumi", setting.maxHumi)) {
       memory.updateNow();
     }   
-      // ===============Обновление времени запуска реле Полив========================
+      // ====Обновление времени запуска реле Полив
     if (ui.clickTime("startTime2", setting.startTime2)) {
       startSeconds1 = setting.startTime2.hour * 60 * 60 + setting.startTime2.minute * 60 + setting.startTime2.second;
       memory.updateNow();
@@ -422,12 +421,6 @@ void setup() {
   if (!LittleFS.begin()) Serial.println("FS Error");
   ui.downloadAuto(true);
 
- // ntp.begin();         // запускаем часы
- // ntp.setGMT(3);       // часовой пояс. Для Москвы: 3
- // ntp.setPeriod(600);  // обновлять раз в 10 минут
-  
-  //bme280Init();
-
   EEPROM.begin(100);     // выделить память (больше или равно размеру структуры данных)
   memory.begin(0, 'e');  // изменить букву в скобках на другую, чтобы восстановить настройки по умолчанию
 
@@ -476,14 +469,13 @@ void loop() {
     ms3 = millis();
     sensRead();
   }
-   // раз в 5 сек проверяем показание с датчика sens1
+    // раз в 5 сек проверяем показание с датчика sens1
   static uint32_t ms4 = 0;
   if (millis() - ms4 >= 5000) {
    ms4 = millis();
-    now.dayOfTheWeek();
-    String dayWeek = (daysOfTheWeek[now.dayOfTheWeek() - 1 ]);
-    Serial.print("День недели: ");
-    Serial.println (dayWeek);
+   dayWeekRead();
+    //now.dayOfTheWeek();
+    //String dayWeek = (daysOfTheWeek[now.dayOfTheWeek() - 1 ]);
   }
   
   
@@ -493,7 +485,8 @@ void loop() {
 
   nowTime.set(now.hour(), now.minute(), now.second());    
   nowDate.set(now.year(), now.month(), now.day());
-
+  
+  
 
   
 
