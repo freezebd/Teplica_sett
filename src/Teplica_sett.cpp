@@ -22,8 +22,8 @@
 
 //#define STATIC_IP // закомментировать если подключаетесь к мобильной точке доступа на телефоне
 
-const char* ssid = "VideoWiFi";
-const char* password = "01082011";
+const char* ssid = "INTERNET";
+const char* password = "Vladilen";
 
 #ifdef STATIC_IP
 //со статическим айпишничком
@@ -33,39 +33,28 @@ IPAddress subnet(255, 255, 255, 0);
 IPAddress dns1(192, 168, 0, 1);  // изменить тройку на свою подсеть
 IPAddress dns2(8, 8, 8, 8);
 #endif
-
 // настройка pin's
 #define RELE1 33
 #define RELE2 25
 #define RELE3 26
 #define RELE4 27
-#define ON 0
-#define OFF 1
+#define ON 1
+#define OFF 0
 // настройка аналог pin
 #define SENS1 36
-
-
-#include <WiFi.h>              // espESP8266  ESP8266WiFi.h
-//#include <GyverNTP.h>
+#include <WiFi.h>                      // esp32 WiFi поддержка
+// #include <ESP8266WiFi.h>            // espESP8266  WiFi Поддержка
+//#include <GyverNTP.h>                // Время из интернета
 //GyverNTP ntp(3);
 //Datime dt(NTP);
-#include <LittleFS.h>
-#include <GyverPortal.h>
-GyverPortal ui(&LittleFS);     // для проверки файлов
-
-#include <RTClib.h>      // Часы реального времени
-RTC_DS3231 rtc;
-char daysOfTheWeek[7][23] = {"Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"};
-
-  
-
-
-#include <SPI.h> // для I2C
-
-
-//Для датчика HTU21
-#include <GyverHTU21D.h>
-GyverHTU21D htu;
+#include <LittleFS.h>                  // Файловая система
+#include <GyverPortal.h>               // Библиотека Веб морды
+GyverPortal ui(&LittleFS);             // для проверки файлов
+#include <RTClib.h>                    // Часы реального времени
+RTC_DS3231 rtc;                        // Инициализация модуля реального времени
+#include <SPI.h>                       // для I2C
+#include <GyverHTU21D.h>               //Для датчика HTU21
+GyverHTU21D htu;                       // Инициализация датчика температуры и влажности по I2C
 
 //============Переменные для графика Ajax===========
 const char *plot_1[] = {
@@ -74,7 +63,6 @@ const char *plot_1[] = {
 
 //настройки, хранятся в памяти EEPROM
 struct Settings {
-  //  char str[15] = "ello kitty!";
   GPtime startTime;             // таймер света
   GPtime stopTime;              // таймер света
   GPtime startTime2;            // таймер полива
@@ -94,7 +82,10 @@ struct Settings {
   bool rele_2_isOn = 0;
   bool rele_3_isOn = 0;
   bool rele_4_isOn = 0;
-  
+  uint32_t startSeconds = 0;
+  uint32_t stopSeconds = 0;
+  uint32_t startSeconds1 = 0;
+  uint32_t stopSeconds1 = 0;
   };
 
 Settings setting;
@@ -103,29 +94,26 @@ Settings setting;
 #include <EEManager.h>          // подключаем либу
 EEManager memory(setting);      // передаём нашу переменную (фактически её адрес)
 
-
 GPdate nowDate;
 GPtime nowTime;
 uint32_t startSeconds = 0;
 uint32_t stopSeconds = 0;
+uint32_t startSeconds1 = 0;
+uint32_t stopSeconds1 = 0;
 bool dependByTime1 = 1;         // флаг разрешения включения полив по времени
 bool dependByLight = 1;
 bool dependByHeating = 1;
 bool dependByHumidity = 1;
 bool dependByWatering = 1;
 bool dependByOnOff = 1;
-uint32_t startSeconds1 = 0;
-uint32_t stopSeconds1 = 0;
 float temperature = 0.0;
 float humidity = 0.0;
-float humiditySoil = 0.0;
+int humiditySoil = 0;
 int summTemp;
 int summHum; 
 int summHumSoil;
 String dayWeek;
-
-
-
+int namWeek = 0;
 
 //функци для датчика температуры htu21D
 void htuRead() {
@@ -134,18 +122,6 @@ void htuRead() {
   humidity = htu.getHumidity();        // переменная для влажности
   summTemp = temperature * 100 / 100 ; //переменная для графика int
   summHum = humidity * 100 / 100 ;     //переменная для графика int
- // Serial.print("Температура = ");
- // Serial.print(temperature);
- // Serial.println(" °C");
- // Serial.print("Влажность = ");
- // Serial.print(humidity);
- // Serial.println(" %"); 
- // Serial.print("Температура = ");
- // Serial.print(summTemp);
- // Serial.println(" °C");
- // Serial.print("Влажность = ");
- // Serial.print(summHum);
- // Serial.println(" %"); 
 }
 
 // функця для датчика влажности почвы
@@ -159,14 +135,24 @@ void sensRead() {
 
 // функция дня недели
 void dayWeekRead() {
-  String daysOfTheWeek[] = {"Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"};
+  String daysOfTheWeek[] = {"Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"};
   DateTime now = rtc.now();
-  String dayWeek = daysOfTheWeek[now.dayOfTheWeek()];
-  Serial.print("День недели : ");
+  dayWeek = daysOfTheWeek[now.dayOfTheWeek() ];
+  namWeek = now.dayOfTheWeek();
+ /* Serial.print("День недели : ");
   Serial.println(dayWeek);
+  Serial.print("Лампа реле 4 :");
+  Serial.println(setting.rele_4_isOn);
+  Serial.print("Состояние реле 4 :");
+  Serial.println(digitalRead(RELE4));
+  Serial.print("Состояние переключателя датчика вл :");
+  Serial.println(setting.dependByOnOff);
+  Serial.print("МинВлажн :");
+  Serial.println(setting.minHumiSoil);
+  Serial.print("МахВлажн :");
+  Serial.println(setting.maxHumiSoil);
+  */
 }
-
-
 
 // поддержка wifi связи
 void wifiSupport() {
@@ -197,29 +183,21 @@ void wifiSupport() {
   }
 }  //wifiSupport()
 
-// конструктор WEB страницы
+// ==============================конструктор WEB страницы=============================
 void build() {
+  GP.ONLINE_CHECK();                   // Проверка системы на On-Line
   GP.BUILD_BEGIN(400);
   GP.THEME(GP_DARK);
   GP.PAGE_TITLE("Rosti-Shishka");
-  GP.ONLINE_CHECK();                   // Проверка системы на On-Line
-
   //все обновляющиеся параметры на WEB странице надо указать тут
-  GP.UPDATE("nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw,dayWeek");
-  
+  GP.UPDATE("dayWeek,namWeek,nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw");
   GP_MAKE_BLOCK_TAB(
     "Рости-Шишка",
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
-    GP_MAKE_BOX(GP.LABEL("dayWeek" , dayWeek););
-    GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив"); ); // Верхнее меню блоков навигации
+    GP_MAKE_BOX(GP.LABEL("NAN", "dayWeek"); GP.LABEL("NAN", "namWeek"); ); // День недели
+    GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив"); );       // Верхнее меню блоков навигации
   );  
-  
-
-
-
-  GP.NAV_BLOCK_BEGIN();                 // начало блока
-  //                    ===========Блок индикации реле============
-  
+   GP.NAV_BLOCK_BEGIN();                 // начало блока
   // ====================================== блок 0 "Домой"=================================
   GP.BLOCK_BEGIN(GP_TAB, "100%", "Параметры системы");
   GP.LABEL("Освещение:");
@@ -276,10 +254,10 @@ void build() {
   GP.NAV_BLOCK_BEGIN();
   GP_MAKE_BLOCK_TAB( 
   "Настройка полива",
-    GP_MAKE_BOX(GP.LABEL("Текущая влажность почвы: "); GP.LABEL("humidsoil", "humidsoil"); GP.LABEL("%");                                                   );
+    GP_MAKE_BOX(GP.LABEL("Влажность почвы: "); GP.LABEL("humidsoil", "humidsoil"); GP.LABEL("%");                                                   );
     GP_MAKE_BOX(GP.LABEL("Вкл  в: "); GP.TIME("startTime2", setting.startTime2);                                                                            );
     GP_MAKE_BOX(GP.LABEL("Выкл в: "); GP.TIME("stopTime2", setting.stopTime2);                                                                              );
-    GP_MAKE_BOX(GP.LABEL("Либо по датчику "); GP.SWITCH("sw", setting.dependByOnOff);                                                                       );  // изменить на влажность
+    GP_MAKE_BOX(GP.LABEL("По датчику "); GP.SWITCH("sw", setting.dependByOnOff);                                                                       );  // изменить на влажность
     GP_MAKE_BOX(GP.LABEL("Вкл  при: "); GP.SPINNER("minHumiSoil", setting.minHumiSoil, 10, 100, 5); GP.LABEL("%");                                          );
     GP_MAKE_BOX(GP.LABEL("Выкл при: "); GP.SPINNER("maxHumiSoil", setting.maxHumiSoil, 10, 100, 5); GP.LABEL("%");                                          );
     GP_MAKE_BOX(GP.LABEL("Реле 4:"); GP.LED_RED("releIndikator_4_4", setting.rele_4_isOn); GP.SWITCH("sw_3", setting.dependByWatering); GP.LABEL("On/Off"); );
@@ -287,8 +265,6 @@ void build() {
   GP.NAV_BLOCK_END();
   GP.BUILD_END();
 }
-
-
 void action() {
   // если было обновление 
   if (ui.update()) {
@@ -314,10 +290,10 @@ void action() {
     ui.updateBool("sw_2", setting.dependByHumidity);  // Свич влажности
     ui.updateBool("sw_3", setting.dependByWatering);  // Свич полива
     ui.updateBool("sw", setting.dependByOnOff);       // Свитч 
-    ui.updateString("", dayWeek);              // день недели
-  
+    ui.updateString("dayWeek", dayWeek);            // день недели
+    ui.updateInt("namWeek", namWeek);
   if (ui.update("plot")) {                                 // Обновление данных для графика
-    int answ[] = {summTemp, summHum, summHumSoil};    // Обновление данных для графика было int
+    int answ[] = {summTemp, summHum, summHumSoil};         // Обновление данных для графика
     ui.answer(answ, 3);                                    // Обновление данных для графика
     }
   } //ui.update()
@@ -339,11 +315,11 @@ void action() {
     
     // ====обновление времени запуска и отключения света
     if (ui.clickTime("startTime", setting.startTime)) {
-      startSeconds = setting.startTime.hour * 60 * 60 + setting.startTime.minute * 60 + setting.startTime.second;
+      setting.startSeconds = setting.startTime.hour * 60 * 60 + setting.startTime.minute * 60 + setting.startTime.second;
       memory.updateNow();
     }
     if (ui.clickTime("stopTime", setting.stopTime)) {
-      stopSeconds = setting.stopTime.hour * 60 * 60 + setting.stopTime.minute * 60 + setting.stopTime.second;
+      setting.stopSeconds = setting.stopTime.hour * 60 * 60 + setting.stopTime.minute * 60 + setting.stopTime.second;
       memory.updateNow();
     }
     if (ui.clickBool("sw_light", setting.dependByLight)) {
@@ -372,11 +348,11 @@ void action() {
     }   
       // ====Обновление времени запуска реле Полив
     if (ui.clickTime("startTime2", setting.startTime2)) {
-      startSeconds1 = setting.startTime2.hour * 60 * 60 + setting.startTime2.minute * 60 + setting.startTime2.second;
+      setting.startSeconds1 = setting.startTime2.hour * 60 * 60 + setting.startTime2.minute * 60 + setting.startTime2.second;
       memory.updateNow();
     }
     if (ui.clickTime("stopTime2", setting.stopTime2)) {
-      stopSeconds1 = setting.stopTime2.hour * 60 * 60 + setting.stopTime2.minute * 60 + setting.stopTime2.second;
+      setting.stopSeconds1 = setting.stopTime2.hour * 60 * 60 + setting.stopTime2.minute * 60 + setting.stopTime2.second;
       memory.updateNow();
     }
     if (ui.clickBool("sw_3", setting.dependByWatering)) {
@@ -391,13 +367,6 @@ void action() {
     if (ui.clickInt("maxHumiSoil", setting.maxHumiSoil)) {
       memory.updateNow();
     }
-     // =================Если было нажание на кнопку 1 Включаем реле RELE1 Свет
-  /* if (ui.click("sw_light")) {  
-      setting.rele_1_isOn = !setting.rele_1_isOn;
-      if (setting.rele_1_isOn) digitalWrite(RELE1, ON);
-      else digitalWrite(RELE1, OFF);
-      memory.updateNow();
-  */
   }  //ui.click()
 }  //action()
 
@@ -406,10 +375,9 @@ void setup() {
   Serial.begin(115200);
   wifiSupport();
   htu.begin();
+    if (! htu.begin()) Serial.println(F("HTU21D error"));        // Проверка подключения датчика темп и влажности
   rtc.begin();
-   if (!htu.begin()) Serial.println(F("HTU21D error"));
-   
-   if (! rtc.begin()) Serial.println(F("Couldn't find RTC"));  // Проверка модуля реального времени
+    if (! rtc.begin()) Serial.println(F("Couldn't find RTC"));  // Проверка модуля реального времени
   
   // подключаем конструктор и запускаем
   ui.attachBuild(build);
@@ -429,21 +397,15 @@ void setup() {
   pinMode(RELE3, OUTPUT); // определяем состояние пина //влажность
   pinMode(RELE4, OUTPUT); // определяем состояние пина //полив
   pinMode(SENS1, INPUT);  // определяем состояние пина //влажность почвы
-  
+  digitalWrite(RELE1, OFF);
+  digitalWrite(RELE2, OFF);
+  digitalWrite(RELE3, OFF);
+  digitalWrite(RELE4, OFF);
   //==============Проверка состояния реле после подачи питания========================
-  if (setting.rele_1_isOn) digitalWrite(RELE1, ON);
-  else digitalWrite(RELE1, OFF);
-  if (setting.rele_2_isOn) digitalWrite(RELE2, ON);
-  else digitalWrite(RELE2, OFF);
-  if (setting.rele_3_isOn) digitalWrite(RELE3, ON);
-  else digitalWrite(RELE3, OFF);
-  if (setting.rele_4_isOn) digitalWrite(RELE4, ON);
-  else digitalWrite(RELE4, OFF);
-
-
+  
 }  //setup()
 
-void loop() { 
+void loop() {
   ui.tick();
   memory.tick();
   DateTime now = rtc.now();
@@ -460,12 +422,12 @@ void loop() {
   static uint32_t ms2 = 0;
   if (millis() - ms2 >= 1000) {
     ms2 = millis();
-    htuRead();   // или bme280Read();
+    htuRead();   
   }
   
-  // раз в 2 сек проверяем показание с датчика sens1
+  // раз в 5 сек проверяем показание с датчика sens1
   static uint32_t ms3 = 0;
-  if (millis() - ms3 >= 2000) {
+  if (millis() - ms3 >= 5000) {
     ms3 = millis();
     sensRead();
   }
@@ -474,37 +436,33 @@ void loop() {
   if (millis() - ms4 >= 5000) {
    ms4 = millis();
    dayWeekRead();
-    //now.dayOfTheWeek();
-    //String dayWeek = (daysOfTheWeek[now.dayOfTheWeek() - 1 ]);
+
   }
-  
-  
-  // отдаем текущую дату и время переменным в веб интерфейс
-  //nowTime.set(ntp.hour(), ntp.minute(), ntp.second());
-  //nowDate.set(ntp.year(), ntp.month(), ntp.day());
+  // раз в секунду проверяем реле и включаем если надо
+  static uint32_t ms5 = 0;
+  if (millis() - ms5 >= 1000) {
+    ms5 = millis();
 
   nowTime.set(now.hour(), now.minute(), now.second());    
   nowDate.set(now.year(), now.month(), now.day());
+  // определяем текущее количество секунд от начала суток
+  uint32_t nowSeconds = nowTime.hour * 3600 + nowTime.minute * 60 + nowTime.second;
   
-  
-
-  
-
   //================================логика==============================
  
   //====================== Включаем по времени Свет ====================
   if (!setting.dependByLight)
-  { // Если свитч отключен, то реле выключить
-    setting.rele_1_isOn = 0;
-    digitalWrite(RELE1, OFF);
-  }
+    {
+     setting.rele_1_isOn = 0;
+     digitalWrite(RELE1, OFF);
+    }
   else
   {
-    uint32_t nowSeconds = nowTime.hour * 3600 + nowTime.minute * 60 + nowTime.second;
+    
     // если нет перехода через полночь
-    if (startSeconds < stopSeconds)
+    if (setting.startSeconds < setting.stopSeconds)
     {
-      if ((startSeconds <= nowSeconds) && (nowSeconds <= stopSeconds))
+      if ((setting.startSeconds <= nowSeconds) && (nowSeconds <= setting.stopSeconds))
       {
         digitalWrite(RELE1, ON);
         setting.rele_1_isOn = 1;
@@ -516,20 +474,23 @@ void loop() {
       }
     }
     // переход через полночь
-    else if (startSeconds > stopSeconds)
+    else if (setting.startSeconds > setting.stopSeconds)
     {
-      if ((stopSeconds <= nowSeconds) && (nowSeconds <= startSeconds))
+      if (((setting.stopSeconds <= nowSeconds) && (nowSeconds >= setting.startSeconds)) || ((setting.stopSeconds >= nowSeconds) && (nowSeconds <= setting.startSeconds)))
+      {
+        digitalWrite(RELE1, ON);
+        setting.rele_1_isOn = 1;
+        
+      }
+      else
       {
         digitalWrite(RELE1, OFF);
         setting.rele_1_isOn = 0;
       }
-      else
-      {
-        digitalWrite(RELE1, ON);
-        setting.rele_1_isOn = 1;
-      }
     }
-  }
+   }
+
+  
   //===============================Логика нагрев воздуга ============
   // включаем по температуре Нагрев
   if (!setting.dependByHeating)
@@ -571,13 +532,12 @@ void loop() {
     digitalWrite(RELE4, OFF);
     setting.rele_4_isOn = 0;
   }
-  else if ((setting.dependByOnOff) && (setting.dependByWatering))
-  {
-    uint32_t nowSeconds1 = nowTime.hour * 3600 + nowTime.minute * 60 + nowTime.second;
+  else if (!setting.dependByOnOff)
     // если нет перехода через полночь
-    if (startSeconds1 < stopSeconds1)
+  {
+    if (setting.startSeconds1 < setting.stopSeconds1)
     {
-      if ((startSeconds1 <= nowSeconds1) && (nowSeconds1 <= stopSeconds1))
+      if ((setting.startSeconds1 <= nowSeconds) && (nowSeconds <= setting.stopSeconds1))
       {
         digitalWrite(RELE4, ON);
         setting.rele_4_isOn = 1;
@@ -589,33 +549,32 @@ void loop() {
       }
     }
     // переход через полночь
-    else if (startSeconds1 > stopSeconds1)
+    else if (setting.startSeconds1 > setting.stopSeconds1)
     {
-      if ((stopSeconds1 <= nowSeconds1) && (nowSeconds1 <= startSeconds1))
-      {
-        digitalWrite(RELE4, OFF);
-        setting.rele_4_isOn = 0;
-      }
-      else
+      if (((setting.stopSeconds1 <= nowSeconds) && (nowSeconds >= setting.startSeconds1)) || ((setting.stopSeconds1 >= nowSeconds) && (nowSeconds <= setting.startSeconds1)))
       {
         digitalWrite(RELE4, ON);
         setting.rele_4_isOn = 1;
       }
-    }
-
-     if (setting.dependByOnOff) // Проверка 
-    {
-      if ((humiditySoil <= setting.minHumiSoil) || (humiditySoil <= setting.maxHumiSoil))
-      {
-        setting.rele_4_isOn = 1;
-        digitalWrite(RELE4, ON);
-      }
       else
       {
-        setting.rele_4_isOn = 0;
         digitalWrite(RELE4, OFF);
+        setting.rele_4_isOn = 0;
       }
     }
   }
-
+  if (setting.dependByOnOff) // Проверка 
+    {
+      if ((humiditySoil <= setting.minHumiSoil) || (humiditySoil <= setting.maxHumiSoil))
+      {
+        digitalWrite(RELE4, ON);
+        setting.rele_4_isOn = 1;
+      }
+      else
+      {
+        digitalWrite(RELE4, OFF);
+        setting.rele_4_isOn = 0;
+      }
+    }
+ } // ms5
 } // loop()
