@@ -4,13 +4,19 @@
 // если при запуске нажата кнопка на D2 (к GND)
 // открывается точка WiFi Config с формой ввода
 // храним настройки в EEPROM
-
 */
 
 //#define STATIC_IP // закомментировать если подключаетесь к мобильной точке доступа на телефоне
+const char* ssid = "VideoWiFi";
+const char* password = "01082011";
 
-//const char* ssid = "INTERNET";
-//const char* password = "Vladilen";
+#ifdef STATIC_IP  //со статическим айпишничком
+IPAddress staticIP(192, 168, 1, 23); // важно правильно указать третье число - подсеть, смотри пояснения выше
+IPAddress gateway (192, 168, 1, 1);    // и тут изменить тройку на свою подсеть
+IPAddress subnet  (255, 255, 255, 0);
+IPAddress dns1    (192, 168, 1, 4);       // изменить тройку на свою подсеть
+IPAddress dns2    (8, 8, 8, 8);
+#endif
 
 #define RELE1 33
 #define RELE2 25
@@ -18,8 +24,8 @@
 #define RELE4 27
 #define ON 1
 #define OFF 0
-#define SENS1 36                       // настройка аналог pin
-#include <WiFi.h>                      // esp32 WiFi поддержка
+#define SENS1 36 
+#include <WiFi.h>                       // esp32 WiFi поддержка                      // настройка аналог pin                     
 #include <LittleFS.h>                  // Файловая система
 #include <GyverPortal.h>               // Библиотека Веб морды
 GyverPortal ui(&LittleFS);             // для проверки файлов
@@ -30,6 +36,7 @@ RTC_DS3231 rtc;                        // Инициализация модул�
 GyverHTU21D htu;                       // Инициализация датчика температуры и влажности по I2C
 #include <EEPROM.h>
 #include <EEManager.h>                 // Менеджер памяти
+
 struct Settings {                      //настройки, хранятся в памяти EEPROM
   GPtime startTime;                    // таймер света
   GPtime stopTime;                     // таймер света
@@ -58,12 +65,6 @@ struct Settings {                      //настройки, хранятся в
 Settings setting;
 EEManager memory(setting);   // передаём нашу переменную (фактически её адрес)
 
-struct LoginPass {           // Структура в памяти для логина и пароля WiFi
-  char ssid[20];
-  char pass[20];
-};
-LoginPass lp;
-
 GPdate nowDate;
 GPtime nowTime;
 uint32_t startSeconds = 0;
@@ -87,6 +88,42 @@ int namWeek = 0;
 const char *plot_1[] = {     //============Переменные для графика Ajax===========
   "temp", "humidity", "humiditySoil"
 };
+
+// поддержка wifi связи
+void wifiSupport() {
+  if (WiFi.status() != WL_CONNECTED) {
+    // Подключаемся к Wi-Fi
+    Serial.print("Подключение к  ");
+    Serial.print(ssid);
+    Serial.print(":");
+    WiFi.mode(WIFI_STA);
+#ifdef STATIC_IP
+    if (WiFi.config(staticIP, gateway, subnet, dns1, dns2) == false) {
+      Serial.println("Сбой настройки WIFI!");
+      return;
+    }
+#endif
+
+    WiFi.begin(ssid, password);
+    uint8_t trycon = 0;
+    while (WiFi.status() != WL_CONNECTED) {
+      if (trycon++ < 30) {
+        Serial.print(".");
+        delay(500);
+      }
+      else {
+        Serial.print("no connection to Wifi. Esp restarts NOW!");
+        delay(1000);
+        ESP.restart();
+      }
+    }
+    Serial.println("Connected. \nIP: ");
+
+    // Выводим IP ESP32
+    Serial.println(WiFi.localIP());
+  }
+}//wifiSupport()
+
 void htuRead() {
   htu.readTick();                      //Запускаем датчик
   temperature = htu.getTemperature();  //переменная для температуры
@@ -198,95 +235,12 @@ void build() {
     GP_MAKE_BOX(GP.LABEL("Выкл при: "); GP.SPINNER("maxHumiSoil", setting.maxHumiSoil, 10, 100, 5); GP.LABEL("%"); );
     GP_MAKE_BOX(GP.LABEL("Реле 4:"); GP.LED_RED("releIndikator_4_4", setting.rele_4_isOn); GP.SWITCH("sw_3", setting.dependByWatering); GP.LABEL("On/Off"); );
    );
-   //==========================Блок WiFi
-  GP.NAV_BLOCK_BEGIN();                  // начало блока
-  GP_MAKE_BLOCK_TAB( 
-    "Настройка света",
-    GP_MAKE_BOX(GP.FORM_BEGIN("/login"); GP.FORM_BEGIN("/login"); GP.TEXT("lg", "Login", lp.ssid); );
-    GP_MAKE_BOX(GP.TEXT("ps", "Password", lp.pass); );
-    GP_MAKE_BOX(GP.SUBMIT("Submit"););
-  );
-  GP.FORM_END();
+   
+  //GP.FORM_END();
   GP.NAV_BLOCK_END();
   GP.BUILD_END();
 }
-void setup() { 
-  delay(2000);
-  Serial.begin(115200);
-  Serial.println();
-  htu.begin();
-    if (! htu.begin()) Serial.println(F("HTU21D error"));        // Проверка подключения датчика темп и влажности
-  rtc.begin();
-    if (! rtc.begin()) Serial.println(F("Couldn't find RTC"));   // Проверка модуля реального времени
-
-  EEPROM.begin(100); //                           читаем логин пароль из памяти
-  EEPROM.get(0, lp);
-
-  pinMode(2, INPUT_PULLUP);  // если кнопка нажата - открываем портал
-  if (!digitalRead(2)) loginPortal();
-
-  // пытаемся подключиться
-  Serial.print("Connect to: ");
-  Serial.println(lp.ssid);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(lp.ssid, lp.pass);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println();
-  Serial.print("Connected! Local IP: ");
-  Serial.println(WiFi.localIP());
-
-  // подключаем конструктор и запускаем
-  ui.attachBuild(build);
-  ui.attach(action);
-  ui.start();
-  ui.enableOTA();  // без пароля
-  //ui.enableOTA("admin", "pass");  // с паролем
-  if (!LittleFS.begin()) Serial.println("FS Error");
-  ui.downloadAuto(true);
-
-  EEPROM.begin(100);     // выделить память (больше или равно размеру структуры данных)
-  memory.begin(0, 's');  // изменить букву в скобках на другую, чтобы восстановить настройки по умолчанию
-  byte stat = memory.begin(0, 's');
-  Serial.print(stat);
-
-  pinMode(RELE1, OUTPUT); // определяем состояние пина //свет
-  pinMode(RELE2, OUTPUT); // определяем состояние пина //нагрев
-  pinMode(RELE3, OUTPUT); // определяем состояние пина //влажность
-  pinMode(RELE4, OUTPUT); // определяем состояние пина //полив
-  pinMode(SENS1, INPUT);  // определяем состояние пина //влажность почвы
-  digitalWrite(RELE1, OFF);
-  digitalWrite(RELE2, OFF);
-  digitalWrite(RELE3, OFF);
-  digitalWrite(RELE4, OFF);
-}  //setup()
-void loginPortal() {
-    Serial.println("Portal start");
-
-    // запускаем точку доступа
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP("WiFi Config");
-
-    // запускаем портал
-    //GyverPortal ui(&LittleFS);
-    // ui.attachBuild(build);
-    // ui.start();
-    // ui.attach(action);
-    // ui.enableOTA();
-    // ui.downloadAuto(true);
-    // работа портала
-    while (ui.tick());
-}
-void action(GyverPortal& p) {
-  if (p.form("/login")) {            // кнопка нажата
-    p.copyStr("lg", lp.ssid);        // копируем себе
-    p.copyStr("ps", lp.pass);
-    EEPROM.put(0, lp);               // сохраняем
-    EEPROM.commit();                 // записываем
-    WiFi.softAPdisconnect();         // отключаем AP
-  }
+void action() {
   // если было обновление 
   if (ui.update()) {
     ui.updateDate("nowDate", nowDate);
@@ -382,12 +336,50 @@ void action(GyverPortal& p) {
     }
   }  //ui.click()
 }  //action()
+
+void setup() { 
+  Serial.begin(115200);
+  wifiSupport();
+  htu.begin();
+    if (! htu.begin()) Serial.println(F("HTU21D error"));        // Проверка подключения датчика темп и влажности
+  rtc.begin();
+    if (! rtc.begin()) Serial.println(F("Couldn't find RTC"));   // Проверка модуля реального времени
+
+  // подключаем конструктор и запускаем
+  ui.attachBuild(build);
+  ui.attach(action);
+  ui.start();
+  ui.enableOTA();  // без пароля
+  //ui.enableOTA("admin", "pass");  // с паролем
+  if (!LittleFS.begin()) Serial.println("FS Error");
+  ui.downloadAuto(true);
+
+  EEPROM.begin(100);     // выделить память (больше или равно размеру структуры данных)
+  memory.begin(0, 's');  // изменить букву в скобках на другую, чтобы восстановить настройки по умолчанию
+  byte stat = memory.begin(0, 's');
+  Serial.print(stat);
+
+  pinMode(RELE1, OUTPUT); // определяем состояние пина //свет
+  pinMode(RELE2, OUTPUT); // определяем состояние пина //нагрев
+  pinMode(RELE3, OUTPUT); // определяем состояние пина //влажность
+  pinMode(RELE4, OUTPUT); // определяем состояние пина //полив
+  pinMode(SENS1, INPUT);  // определяем состояние пина //влажность почвы
+  digitalWrite(RELE1, OFF);
+  digitalWrite(RELE2, OFF);
+  digitalWrite(RELE3, OFF);
+  digitalWrite(RELE4, OFF);
+}  //setup()
+
 void loop() {
   ui.tick();
   memory.tick();
   DateTime now = rtc.now();
 
-  // раз в 10 сек проверим стабильность сети
+  static uint32_t ms1 = 0;
+  if (millis() - ms1 >= 10000) {
+    ms1 = millis();
+    wifiSupport();
+  }//ms
   
   // раз в 1 сек проверяем показание с датчика
   static uint32_t ms2 = 0;
