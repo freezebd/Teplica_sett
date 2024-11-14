@@ -1,11 +1,8 @@
 {
 	"folders": [
 		{
+			"name": "Teplica_sett",
 			"path": ".."
-		},
-		{
-			"name": "test",
-			"path": "../../test"
 		}
 	],
 	"settings": {}
