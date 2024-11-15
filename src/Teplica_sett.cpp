@@ -1,16 +1,4 @@
-//  пояснения по прошивке 1.20////////////////////
-
-//#define STATIC_IP // закомментировать если подключаетесь к мобильной точке доступа на телефоне
-const char* ssid = "VideoWiFi";
-const char* password = "01082011";
-
-#ifdef STATIC_IP  //со статическим айпишничком
-IPAddress staticIP(192, 168, 1, 23); // важно правильно указать третье число - подсеть, смотри пояснения выше
-IPAddress gateway (192, 168, 1, 1);    // и тут изменить тройку на свою подсеть
-IPAddress subnet  (255, 255, 255, 0);
-IPAddress dns1    (192, 168, 1, 4);       // изменить тройку на свою подсеть
-IPAddress dns2    (8, 8, 8, 8);
-#endif
+//  пояснения по прошивке 1.22////////////////////
 
 #define RELE1 33
 #define RELE2 25
@@ -18,18 +6,19 @@ IPAddress dns2    (8, 8, 8, 8);
 #define RELE4 27
 #define ON 1
 #define OFF 0
-#define SENS1 36 
-#include <WiFi.h>                       // esp32 WiFi поддержка                      // настройка аналог pin                     
+#define SENS1 36                       // настройка аналог pin 
+#include <WiFi.h>                      // esp32 WiFi поддержка                                          
 #include <LittleFS.h>                  // Файловая система
 #include <GyverPortal.h>               // Библиотека Веб морды
-GyverPortal ui(&LittleFS);             // для проверки файлов
 #include <RTClib.h>                    // Часы реального времени
-RTC_DS3231 rtc;                        // Инициализация модуля реального времени
 #include <SPI.h>                       // для I2C
 #include <GyverHTU21D.h>               //Для датчика HTU21
-GyverHTU21D htu;                       // Инициализация датчика температуры и влажности по I2C
 #include <EEPROM.h>
 #include <EEManager.h>                 // Менеджер памяти
+
+GyverHTU21D htu;                       // Инициализация датчика температуры и влажности по I2C
+GyverPortal ui(&LittleFS);             // для проверки файлов
+RTC_DS3231 rtc;                        // Инициализация модуля реального времени
 
 struct Settings {                      //настройки, хранятся в памяти EEPROM
   GPtime startTime;                    // таймер света
@@ -55,9 +44,15 @@ struct Settings {                      //настройки, хранятся в
   uint32_t stopSeconds = 0;
   uint32_t startSeconds1 = 0;
   uint32_t stopSeconds1 = 0;
-  };
+};
 Settings setting;
-EEManager memory(setting);   // передаём нашу переменную (фактически её адрес)
+EEManager memory(setting);    // передаём нашу переменную настроек (фактически её адрес)
+
+struct SettingsWIFi {            // Структура WiFi храним в EEPROM
+  char ssid[30];
+  char password[30];
+} 
+user_wifi = {};
 
 GPdate nowDate;
 GPtime nowTime;
@@ -83,41 +78,6 @@ const char *plot_1[] = {     //============Переменные для граф�
   "temp", "humidity", "humiditySoil"
 };
 
-// поддержка wifi связи
-void wifiSupport() {
-  if (WiFi.status() != WL_CONNECTED) {
-    // Подключаемся к Wi-Fi
-    Serial.print("Подключение к  ");
-    Serial.print(ssid);
-    Serial.print(":");
-    WiFi.mode(WIFI_STA);
-#ifdef STATIC_IP
-    if (WiFi.config(staticIP, gateway, subnet, dns1, dns2) == false) {
-      Serial.println("Сбой настройки WIFI!");
-      return;
-    }
-#endif
-
-    WiFi.begin(ssid, password);
-    uint8_t trycon = 0;
-    while (WiFi.status() != WL_CONNECTED) {
-      if (trycon++ < 30) {
-        Serial.print(".");
-        delay(500);
-      }
-      else {
-        Serial.print("no connection to Wifi. Esp restarts NOW!");
-        delay(1000);
-        ESP.restart();
-      }
-    }
-    Serial.println("Connected. \nIP: ");
-
-    // Выводим IP ESP32
-    Serial.println(WiFi.localIP());
-  }
-}//wifiSupport()
-
 void htuRead() {
   htu.readTick();                      //Запускаем датчик
   temperature = htu.getTemperature();  //переменная для температуры
@@ -125,13 +85,15 @@ void htuRead() {
   summTemp = temperature * 100 / 100 ; //переменная для графика int
   summHum = humidity * 100 / 100 ;     //переменная для графика int
 }
+
 void sensRead() {
   humiditySoil = analogRead(SENS1);
   summHumSoil = humiditySoil / 100 ;
-  Serial.print("Влажность почвы = ");
-  Serial.print(humiditySoil);
-  Serial.println(" %");
+  //Serial.print("Влажность почвы = ");
+ // Serial.print(humiditySoil);
+ // Serial.println(" %");
 }
+
 void dayWeekRead() {
   String daysOfTheWeek[] = {"Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"};
   DateTime now = rtc.now();
@@ -151,18 +113,19 @@ void dayWeekRead() {
   Serial.println(setting.maxHumiSoil);
   */
 }
+
 void build() {
   GP.ONLINE_CHECK();                   // Проверка системы на On-Line
   GP.BUILD_BEGIN(400);
   GP.THEME(GP_DARK);
   GP.PAGE_TITLE("Rosti-Shishka");
-  //все обновляющиеся параметры на WEB странице надо указать тут
+   //все обновляющиеся параметры на WEB странице надо указать тут
   GP.UPDATE("dayWeek,namWeek,nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw");
   GP_MAKE_BLOCK_TAB(
     "Рости-Шишка",
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
     GP_MAKE_BOX(GP.LABEL("NAN", "dayWeek"); GP.LABEL("NAN", "namWeek"); ); // День недели
-    GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив, WiFi"); );       // Верхнее меню блоков навигации
+    GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив,Авто"); );       // Верхнее меню блоков навигации
   );  
    GP.NAV_BLOCK_BEGIN();                 // начало блока
   // ====================================== блок 0 "Домой"=================================
@@ -181,7 +144,7 @@ void build() {
   GP.LABEL("Графики"); 
   GP.BREAK();
   GP.AJAX_PLOT_DARK("plot", plot_1, 3, 20, 3000);   // Конструктор графика AJAX_PLOT
-  GP.BLOCK_END();
+   GP.BLOCK_END();
   GP.NAV_BLOCK_END();  // закончен весь блок
 
   // ================================= Блок 1 "Свет" =================================
@@ -200,21 +163,21 @@ void build() {
   GP_MAKE_BLOCK_TAB(
     "Настройка подогрева",                              
     GP_MAKE_BOX(GP.LABEL("Текущая температура: "); GP.LABEL("tempr", "tempr"); GP.LABEL("*С");                                                             );
-    GP_MAKE_BOX(GP.LABEL("Вкл.  при: "); GP.SPINNER("minTempr", setting.minTempr, 0, 80, 1, 1); GP.LABEL("*С");                                            );
-    GP_MAKE_BOX(GP.LABEL("Выкл. при: "); GP.SPINNER("maxTempr", setting.maxTempr, 0, 80, 1, 1); GP.LABEL("*С");                                            );
+    GP_MAKE_BOX(GP.LABEL("Вкл.  при: "); GP.SPINNER("minTempr", setting.minTempr, 0, 80, 1); GP.LABEL("*С");                                            );
+    GP_MAKE_BOX(GP.LABEL("Выкл. при: "); GP.SPINNER("maxTempr", setting.maxTempr, 0, 80, 1); GP.LABEL("*С");                                            );
     GP_MAKE_BOX(GP.LABEL("Реле 2:"); GP.LED_RED("releIndikator_2_2", setting.rele_2_isOn); GP.SWITCH("sw_1", setting.dependByHeating); GP.LABEL("On/Off"); );
   );
   GP.NAV_BLOCK_END();
 
-  //============================= Блок 3 "Влажность"============================
+      //============================= Блок 3 "Влажность"============================
   GP.NAV_BLOCK_BEGIN();
   GP_MAKE_BLOCK_TAB( 
-    "Настройка увлажнителя воздуха",
+     "Настройка увлажнителя воздуха",
     GP_MAKE_BOX(GP.LABEL("Текщая влажность: "); GP.LABEL("humid", "humid"); GP.LABEL("%");                                                                   );
-    GP_MAKE_BOX(GP.LABEL("Вкл.  при: "); GP.SPINNER("minHumi", setting.minHumi, 0, 80, 1, 1); GP.LABEL("%");                                                 );
-    GP_MAKE_BOX(GP.LABEL("Выкл. при: "); GP.SPINNER("maxHumi", setting.maxHumi, 0, 80, 1, 1); GP.LABEL("%");                                                 ); // Тут дописать автоматику
+     GP_MAKE_BOX(GP.LABEL("Вкл.  при: "); GP.SPINNER("minHumi", setting.minHumi, 0, 80, 1); GP.LABEL("%");                                                 );
+    GP_MAKE_BOX(GP.LABEL("Выкл. при: "); GP.SPINNER("maxHumi", setting.maxHumi, 0, 80, 1); GP.LABEL("%");                                                 ); // Тут дописать автоматику
     GP_MAKE_BOX( GP.LABEL("Реле 3:"); GP.LED_RED("releIndikator_3_3", setting.rele_3_isOn); GP.SWITCH("sw_2", setting.dependByHumidity); GP.LABEL("On/Off"); );
-   );    
+  );    
   GP.NAV_BLOCK_END();
 
   //============================== Блок 4 "Полив"===============================
@@ -228,13 +191,40 @@ void build() {
     GP_MAKE_BOX(GP.LABEL("Вкл  при: "); GP.SPINNER("minHumiSoil", setting.minHumiSoil, 10, 100, 5); GP.LABEL("%"); );
     GP_MAKE_BOX(GP.LABEL("Выкл при: "); GP.SPINNER("maxHumiSoil", setting.maxHumiSoil, 10, 100, 5); GP.LABEL("%"); );
     GP_MAKE_BOX(GP.LABEL("Реле 4:"); GP.LED_RED("releIndikator_4_4", setting.rele_4_isOn); GP.SWITCH("sw_3", setting.dependByWatering); GP.LABEL("On/Off"); );
-   );
-   
-  //GP.FORM_END();
+  );
   GP.NAV_BLOCK_END();
+
+  //========================Блок "Авто" ==========================================
+  GP.NAV_BLOCK_BEGIN();
+  GP_MAKE_BLOCK_TAB( 
+  "Авто настройки",
+    GP_MAKE_BOX(GP.LABEL("Выбери культуру");    );
+    GP_MAKE_BOX(GP.SELECT("select", "Ручная настройка,Длинные ростишки,Короткие ростишки,Помидоры,Огурцы", 0, 0, 0, 0); );
+    GP_MAKE_BOX(GP.AREA("settxt", 10, "Тут будет описание настроек по выбранной культуре", "", "true"); );
+  );
+  GP.NAV_BLOCK_END();
+  
   GP.BUILD_END();
+}  
+
+void eepromput(){
+  ui.copyStr("ssid", user_wifi.ssid);
+  ui.copyStr("password", user_wifi.password);
+  
+  EEPROM.begin(sizeof(struct SettingsWIFi));
+  
+  EEPROM.put(0, user_wifi);
+  EEPROM.commit();
+  Serial.println("Reset...");
+  delay(1000);
+  WiFi.softAPdisconnect();
+  ESP.restart();
 }
+
 void action() {
+  if (ui.form("/setup")) {
+    eepromput();
+  }
   // если было обновление 
   if (ui.update()) {
     ui.updateDate("nowDate", nowDate);
@@ -331,28 +321,80 @@ void action() {
   }  //ui.click()
 }  //action()
 
+void buildSetup() {
+  GP.BUILD_BEGIN(600);
+  GP.THEME(GP_LIGHT);
+  GP.GRID_RESPONSIVE(700);
+
+  GP.FORM_BEGIN("/setup");
+  M_GRID(
+    M_BLOCK_TAB(
+      "WiFi Setup",
+
+      M_BOX(GP.LABEL("SSID:     "); GP.TEXT("ssid", "SSID", ""););
+      M_BOX(GP.LABEL("Password: "); GP.TEXT("password", "Password", ""););
+      M_BOX(GP.SUBMIT("Submit"));
+    );
+  );
+
+  GP.FORM_END();
+  GP.BUILD_END();
+}
+
+void setupPortal() {
+  Serial.println("Portal start");
+
+  // запускаем точку доступа
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP("Rostishka WiFi Setup");
+
+  Serial.println("Точка доступа запущена...");
+
+  ui.attachBuild(buildSetup);
+  ui.attach(action);
+  ui.start();
+
+  // работа портала
+  while (ui.tick());
+}
+
 void setup() { 
   Serial.begin(115200);
-  wifiSupport();
+  //memory.reset();
+  EEPROM.begin(sizeof(struct SettingsWIFi) + 300);    // выделить память (больше или равно размеру структуры данных)
+  EEPROM.get(0, user_wifi);
+  memory.begin(sizeof(struct SettingsWIFi), 'e') ;  // изменить букву в скобках на другую, чтобы восстановить настройки по умолчанию
+  
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(user_wifi.ssid, user_wifi.password);
+
+  byte tries = 0;
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+    if (tries++ > 10) {
+      Serial.println("");
+      Serial.println("Не удаётся подключиться.");
+      setupPortal();
+      break;
+    }
+  }
+  Serial.println("");
+  Serial.println("WiFi подключение.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP()); 
+  
+  ui.attachBuild(build);            // подключаем конструктор и запускаем
+  ui.attach(action);
+  ui.start("rostishka", 80);
   htu.begin();
     if (! htu.begin()) Serial.println(F("HTU21D error"));        // Проверка подключения датчика темп и влажности
   rtc.begin();
     if (! rtc.begin()) Serial.println(F("Couldn't find RTC"));   // Проверка модуля реального времени
-
-  // подключаем конструктор и запускаем
-  ui.attachBuild(build);
-  ui.attach(action);
-  ui.start();
-  ui.enableOTA();  // без пароля
-  //ui.enableOTA("admin", "pass");  // с паролем
-  if (!LittleFS.begin()) Serial.println("FS Error");
+  ui.enableOTA();  // без пароля //ui.enableOTA("admin", "pass");  // с паролем
+    if (!LittleFS.begin()) Serial.println("FS Error");
   ui.downloadAuto(true);
-
-  EEPROM.begin(100);     // выделить память (больше или равно размеру структуры данных)
-  memory.begin(0, 's');  // изменить букву в скобках на другую, чтобы восстановить настройки по умолчанию
-  byte stat = memory.begin(0, 's');
-  Serial.print(stat);
-
+  
   pinMode(RELE1, OUTPUT); // определяем состояние пина //свет
   pinMode(RELE2, OUTPUT); // определяем состояние пина //нагрев
   pinMode(RELE3, OUTPUT); // определяем состояние пина //влажность
@@ -362,19 +404,15 @@ void setup() {
   digitalWrite(RELE2, OFF);
   digitalWrite(RELE3, OFF);
   digitalWrite(RELE4, OFF);
+  
 }  //setup()
 
 void loop() {
   ui.tick();
   memory.tick();
+  // memory.tick();
   DateTime now = rtc.now();
 
-  static uint32_t ms1 = 0;
-  if (millis() - ms1 >= 10000) {
-    ms1 = millis();
-    wifiSupport();
-  }//ms
-  
   // раз в 1 сек проверяем показание с датчика
   static uint32_t ms2 = 0;
   if (millis() - ms2 >= 1000) {
@@ -395,14 +433,34 @@ void loop() {
    dayWeekRead();
 
   }
-  // раз в секунду проверяем реле и включаем если надо
+
+  /* 
+  static uint32_t ms6 = 0;
+  if (millis() - ms6 >= 5000) {
+   ms6 = millis();
+   //byte stat =  memory.begin(63, 'e');
+   // byte tat1 = memory.begin(0, 'e');
+   
+   //Serial.print("Статус памяти настроек :");
+   //Serial.println(stat);
+   
+   //Serial.print("Статус памяти WiFi :");
+   //Serial.println(stat1);
+    // раз в 5 сек проверяем статус  EEPROM
+    /*
+    Коды возврата:
+    0 - ключ совпал, данные прочитаны из епром
+    1 - ключ не совпал (первый запуск), данные записаны в епром
+    2 - ошибка, в епроме не хватает места
+  } */
+   
+  // раз в секунду делаем дела
   static uint32_t ms5 = 0;
   if (millis() - ms5 >= 1000) {
     ms5 = millis();
-
-  nowTime.set(now.hour(), now.minute(), now.second());    
-  nowDate.set(now.year(), now.month(), now.day());
-  // определяем текущее количество секунд от начала суток
+    nowTime.set(now.hour(), now.minute(), now.second());    
+    nowDate.set(now.year(), now.month(), now.day());
+    // определяем текущее количество секунд от начала суток
   uint32_t nowSeconds = nowTime.hour * 3600 + nowTime.minute * 60 + nowTime.second;
   
   //================================логика==============================
@@ -520,7 +578,7 @@ void loop() {
       }
     }
   }
-  if (setting.dependByOnOff) // Проверка 
+  if ((setting.dependByOnOff) && (setting.dependByWatering)) // Проверка 
     {
       if ((humiditySoil <= setting.minHumiSoil) || (humiditySoil <= setting.maxHumiSoil))
       {
