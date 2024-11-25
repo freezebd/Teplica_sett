@@ -125,7 +125,7 @@ void build() {
     "Рости-Шишка",
     GP_MAKE_BOX(GP.DATE("nowDate", nowDate, false); GP.TIME("nowTime", nowTime, false); );
     GP_MAKE_BOX(GP.LABEL("NAN", "dayWeek"); GP.LABEL("NAN", "namWeek"); ); // День недели
-    GP_MAKE_BOX(GP.NAV_TABS("Домой,Свет,Нагрев,Влажность,Полив,Авто"); );       // Верхнее меню блоков навигации
+    GP_MAKE_BOX(GP.NAV_TABS("Домой,Авто,Свет,Нагрев,Влажность,Полив"); );       // Верхнее меню блоков навигации
   );  
    GP.NAV_BLOCK_BEGIN();                 // начало блока
   // ====================================== блок 0 "Домой"=================================
@@ -146,6 +146,16 @@ void build() {
   GP.AJAX_PLOT_DARK("plot", plot_1, 3, 20, 3000);   // Конструктор графика AJAX_PLOT
    GP.BLOCK_END();
   GP.NAV_BLOCK_END();  // закончен весь блок
+
+  //========================Блок "Авто" ==========================================
+  GP.NAV_BLOCK_BEGIN();
+  GP_MAKE_BLOCK_TAB( 
+  "Авто настройки",
+    GP_MAKE_BOX(GP.LABEL("Выбери культуру");    );
+    GP_MAKE_BOX(GP.SELECT("select", "Ручная настройка,Длинные ростишки,Короткие ростишки,Помидоры,Огурцы", 0, 0, 0, 0); );
+    GP_MAKE_BOX(GP.AREA("settxt", 10, "Тут будет описание настроек по выбранной культуре", "", "true"); );
+  );
+  GP.NAV_BLOCK_END();
 
   // ================================= Блок 1 "Свет" =================================
   GP.NAV_BLOCK_BEGIN();                  // начало блока
@@ -191,16 +201,6 @@ void build() {
     GP_MAKE_BOX(GP.LABEL("Вкл  при: "); GP.SPINNER("minHumiSoil", setting.minHumiSoil, 10, 100, 5); GP.LABEL("%"); );
     GP_MAKE_BOX(GP.LABEL("Выкл при: "); GP.SPINNER("maxHumiSoil", setting.maxHumiSoil, 10, 100, 5); GP.LABEL("%"); );
     GP_MAKE_BOX(GP.LABEL("Реле 4:"); GP.LED_RED("releIndikator_4_4", setting.rele_4_isOn); GP.SWITCH("sw_3", setting.dependByWatering); GP.LABEL("On/Off"); );
-  );
-  GP.NAV_BLOCK_END();
-
-  //========================Блок "Авто" ==========================================
-  GP.NAV_BLOCK_BEGIN();
-  GP_MAKE_BLOCK_TAB( 
-  "Авто настройки",
-    GP_MAKE_BOX(GP.LABEL("Выбери культуру");    );
-    GP_MAKE_BOX(GP.SELECT("select", "Ручная настройка,Длинные ростишки,Короткие ростишки,Помидоры,Огурцы", 0, 0, 0, 0); );
-    GP_MAKE_BOX(GP.AREA("settxt", 10, "Тут будет описание настроек по выбранной культуре", "", "true"); );
   );
   GP.NAV_BLOCK_END();
   
