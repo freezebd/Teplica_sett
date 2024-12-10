@@ -118,7 +118,7 @@ void build() {
   GP.ONLINE_CHECK();                   // Проверка системы на On-Line
   GP.BUILD_BEGIN(400);
   GP.THEME(GP_DARK);
-  GP.PAGE_TITLE("Rosti-Shishka");
+  GP.PAGE_TITLE("Pomidorka");
    //все обновляющиеся параметры на WEB странице надо указать тут
   GP.UPDATE("dayWeek,namWeek,nowDate,nowTime,nowDay,startTime2,stopTime2,startTime,stopTime,tempr,humid,humidsoil,releIndikator1,releIndikator_1_1,releIndikator2,releIndikator3,releIndikator_3_3,releIndikator4,releIndikator_4_4,releIndikator_2_2,sw_light,sw_1,sw_2,sw_3,sw");
   GP_MAKE_BLOCK_TAB(
@@ -346,7 +346,7 @@ void setupPortal() {
 
   // запускаем точку доступа
   WiFi.mode(WIFI_AP);
-  WiFi.softAP("Rostishka WiFi Setup");
+  WiFi.softAP("Pomidorka WiFi Setup");
 
   Serial.println("Точка доступа запущена...");
 
